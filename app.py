@@ -725,8 +725,7 @@ with right_col:
     # Threshold line
     fig_fc.add_hline(y=data['threshold']*100, line_dash="dot", line_color="rgba(255,200,0,0.3)",
                      annotation_text=f"Threshold {data['threshold']*100:.1f}%",
-                     annotation_font_color="rgba(255,200,100,0.5)",
-                     annotation_font_size=10)
+                     annotation=dict(font=dict(color="rgba(255,200,100,0.5)", size=10)))
 
     # Fill area
     fig_fc.add_trace(go.Scatter(
@@ -760,7 +759,7 @@ with right_col:
         xaxis=dict(gridcolor='rgba(255,255,255,0.04)', tickangle=-30,
                    tickfont=dict(color='rgba(160,210,255,0.4)', size=9, family='Space Mono')),
         showlegend=False,
-        hoverlabel=dict(bgcolor='#0a1f3a', font_color='#e8f4ff', bordercolor='#38b6ff')
+        hoverlabel=dict(bgcolor='#0a1f3a', font=dict(color='#e8f4ff'), bordercolor='#38b6ff')
     )
     st.plotly_chart(fig_fc, use_container_width=True, config={'displayModeBar': False})
 
@@ -801,14 +800,14 @@ with right_col:
             height=220, margin=dict(l=10, r=50, t=10, b=10),
             yaxis=dict(title='mm/hr', gridcolor='rgba(255,255,255,0.04)',
                        tickfont=dict(color='rgba(160,210,255,0.4)', size=10, family='Space Mono'),
-                       zeroline=False, titlefont=dict(color='rgba(160,210,255,0.3)', size=10)),
+                       zeroline=False, title_font=dict(color='rgba(160,210,255,0.3)', size=10)),
             yaxis2=dict(title='°C', overlaying='y', side='right', showgrid=False,
                         tickfont=dict(color='rgba(255,160,50,0.4)', size=10, family='Space Mono'),
-                        titlefont=dict(color='rgba(255,160,50,0.3)', size=10)),
+                        title_font=dict(color='rgba(255,160,50,0.3)', size=10)),
             xaxis=dict(gridcolor='rgba(255,255,255,0.04)', tickangle=-30,
                        tickfont=dict(color='rgba(160,210,255,0.4)', size=9, family='Space Mono')),
             showlegend=False, barmode='overlay',
-            hoverlabel=dict(bgcolor='#0a1f3a', font_color='#e8f4ff', bordercolor='#38b6ff')
+            hoverlabel=dict(bgcolor='#0a1f3a', font=dict(color='#e8f4ff'), bordercolor='#38b6ff')
         )
         st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
 
@@ -839,7 +838,7 @@ with right_col:
             xaxis=dict(gridcolor='rgba(255,255,255,0.04)', tickangle=-30,
                        tickfont=dict(color='rgba(160,210,255,0.4)', size=9, family='Space Mono')),
             showlegend=False,
-            hoverlabel=dict(bgcolor='#0a1f3a', font_color='#e8f4ff', bordercolor='#a06cff')
+            hoverlabel=dict(bgcolor='#0a1f3a', font=dict(color='#e8f4ff'), bordercolor='#a06cff')
         )
         st.plotly_chart(fig_press, use_container_width=True, config={'displayModeBar': False})
 
