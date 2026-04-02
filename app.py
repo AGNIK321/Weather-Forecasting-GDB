@@ -276,8 +276,54 @@ div[data-testid="stHorizontalBlock"] {{ gap:0 !important; }}
 .week-hi {{ font-family:'Sora',sans-serif; font-size:0.9rem; font-weight:700; color:{T['week_hi']}; }}
 .week-lo {{ font-size:0.75rem; color:{T['week_lo']}; }}
 .week-rain {{ font-family:'Space Mono',monospace; font-size:0.6rem; color:{T['accent']}; margin-top:0.3rem; }}
+
+/* ── Live Sensor Pane ─────────────────────────────────────────────────────── */
+.sensor-wrap {{ padding:2rem 3rem; border-top:1px solid {T['footer_bd']}; }}
+.sensor-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1rem; }}
+.sensor-card {{
+    background:{T['now_card_bg']}; border:1px solid {T['now_card_bd']};
+    border-radius:20px; padding:1.6rem 1.2rem; text-align:center; position:relative; overflow:hidden;
+}}
+.sensor-card::after {{ content:''; position:absolute; top:-30px; right:-30px; width:90px; height:90px;
+    border-radius:50%; background:radial-gradient(circle,{T['accent_bg']},transparent 70%); }}
+.sensor-icon {{ font-size:2.2rem; margin-bottom:0.5rem; display:block;
+    filter:drop-shadow(0 0 12px {T['accent_glow']}); }}
+.sensor-val {{ font-family:'Sora',sans-serif; font-size:3.2rem; font-weight:800;
+    color:{T['text_primary']}; line-height:1; letter-spacing:-2px; }}
+.sensor-unit {{ font-size:1.4rem; color:{T['text_faint']}; font-weight:300; }}
+.sensor-lbl {{ font-family:'Space Mono',monospace; font-size:0.6rem; letter-spacing:3px;
+    text-transform:uppercase; color:{T['text_muted']}; margin-top:0.5rem; }}
+.sensor-status {{ display:inline-flex; align-items:center; gap:0.4rem; margin-top:0.8rem;
+    font-family:'Space Mono',monospace; font-size:0.6rem; letter-spacing:2px;
+    text-transform:uppercase; color:{T['accent']}; }}
+.sensor-dot {{ width:6px; height:6px; border-radius:50%; background:{T['accent']};
+    animation:pulse 2s infinite; }}
+.sensor-dot.offline {{ background:#ff4444; animation:none; }}
+.sensor-age {{ font-family:'Space Mono',monospace; font-size:0.58rem;
+    color:{T['meta_tx']}; margin-top:0.3rem; }}
+
 </style>
 """, unsafe_allow_html=True)
+
+# ─── Google Sheets Sensor Reader ─────────────────────────────────────────────
+SHEET_ID  = "1UpnXi_F-GyX7HCaJkV0RO3vSa4EZEiLvlrnVkXi6GFY"
+SHEET_CSV = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&sheet=Sheet1"
+
+@st.cache_data(ttl=10)   # re-fetch every 10 seconds
+def fetch_sensor_data():
+    """Fetch the Google Sheet as CSV and return the latest row + history."""
+    try:
+        df = pd.read_csv(SHEET_CSV)
+        df.columns = [c.strip() for c in df.columns]
+        # Expect columns: Timestamp, Temperature(C), Humidity(%)
+        df = df.dropna(subset=[df.columns[1], df.columns[2]])
+        df['Timestamp']      = pd.to_datetime(df[df.columns[0]], dayfirst=True, errors='coerce')
+        df['Temperature(C)'] = pd.to_numeric(df[df.columns[1]], errors='coerce')
+        df['Humidity(%)']    = pd.to_numeric(df[df.columns[2]], errors='coerce')
+        df = df.dropna().sort_values('Timestamp').reset_index(drop=True)
+        return df
+    except Exception:
+        return pd.DataFrame()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -830,6 +876,137 @@ if comp:
 
 else:
     st.markdown(f"""<div style="padding:1rem 3rem;font-family:'Space Mono',monospace;font-size:0.7rem;color:{T['meta_tx']};">Comparison data unavailable.</div>""", unsafe_allow_html=True)
+
+# ─── Live Hardware Sensor Pane ───────────────────────────────────────────────
+st.markdown(f"""
+<div class="sensor-wrap">
+  <div class="sec-header">
+    <span class="sec-title">&#x1F4E1; Live Hardware Sensor &middot; SHT30 (NodeMCU)</span>
+    <span class="sec-line"></span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+_sensor_df  = fetch_sensor_data()
+_now        = now_ist()  # use IST to match sheet timestamps
+# Sensor is considered CONNECTED only if a row arrived within the last 2 minutes.
+# Beyond that the ESP8266 is powered off / disconnected from WiFi.
+_TIMEOUT_S  = 60
+
+if not _sensor_df.empty:
+    _latest = _sensor_df.iloc[-1]
+    _s_temp = _latest["Temperature(C)"]
+    _s_hum  = _latest["Humidity(%)"]
+    _s_ts   = _latest["Timestamp"]
+    _age_s  = int((_now - _s_ts).total_seconds())
+    _connected = _age_s <= _TIMEOUT_S
+else:
+    _s_temp = _s_hum = None
+    _s_ts   = None
+    _age_s  = None
+    _connected = False
+
+if _connected:
+    # ── SENSOR ONLINE ─────────────────────────────────────────────────────────
+    _age_str = f"{_age_s}s ago" if _age_s < 60 else f"{_age_s // 60}m {_age_s % 60}s ago"
+
+    st.markdown(f"""
+    <div style="padding:0 3rem 1rem;">
+      <div class="sensor-grid">
+        <div class="sensor-card">
+          <span class="sensor-icon">&#x1F321;&#xFE0F;</span>
+          <div class="sensor-val">{_s_temp:.1f}<span class="sensor-unit">&deg;C</span></div>
+          <div class="sensor-lbl">Temperature</div>
+          <div class="sensor-status"><span class="sensor-dot"></span>LIVE</div>
+          <div class="sensor-age">Last update: {_age_str}</div>
+        </div>
+        <div class="sensor-card">
+          <span class="sensor-icon">&#x1F4A7;</span>
+          <div class="sensor-val">{_s_hum:.1f}<span class="sensor-unit">%</span></div>
+          <div class="sensor-lbl">Humidity</div>
+          <div class="sensor-status"><span class="sensor-dot"></span>LIVE</div>
+          <div class="sensor-age">Last update: {_age_str}</div>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # History chart — last 20 readings
+    _hist = _sensor_df.tail(20)
+    _fig_s = go.Figure()
+    _fig_s.add_trace(go.Scatter(
+        x=_hist["Timestamp"], y=_hist["Temperature(C)"],
+        name="Temp °C", mode="lines+markers",
+        line=dict(color=T["accent"], width=2), marker=dict(size=5),
+        hovertemplate="%{x|%H:%M:%S}<br>%{y:.1f}°C<extra></extra>"
+    ))
+    _fig_s.add_trace(go.Scatter(
+        x=_hist["Timestamp"], y=_hist["Humidity(%)"],
+        name="Humidity %", mode="lines+markers", yaxis="y2",
+        line=dict(color=T["press_line"], width=2, dash="dot"), marker=dict(size=5),
+        hovertemplate="%{x|%H:%M:%S}<br>%{y:.1f}%<extra></extra>"
+    ))
+    _fig_s.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=200,
+        margin=dict(l=10,r=50,t=10,b=10), showlegend=True,
+        legend=dict(font=dict(color=T["text_faint"], size=9, family="Space Mono"),
+                    bgcolor="rgba(0,0,0,0)", orientation="h", y=1.15),
+        yaxis=dict(title="°C", gridcolor=T["grid_color"], zeroline=False,
+                   tickfont=dict(color=T["tick_color"], size=9, family="Space Mono"),
+                   title_font=dict(color=T["tick_color"], size=9)),
+        yaxis2=dict(title="%", overlaying="y", side="right", showgrid=False,
+                    tickfont=dict(color=T["tick_color"], size=9, family="Space Mono"),
+                    title_font=dict(color=T["tick_color"], size=9)),
+        xaxis=dict(gridcolor=T["grid_color"], tickangle=-30,
+                   tickfont=dict(color=T["tick_color"], size=8, family="Space Mono")),
+        hoverlabel=dict(bgcolor=T["hoverlabel_bg"], font=dict(color=T["text_secondary"]))
+    )
+    st.markdown(f"""<div style="padding:0 3rem 0.5rem;">
+      <div class="sec-header">
+        <span class="sec-title">Sensor History &middot; Last 20 Readings</span>
+        <span class="sec-line"></span>
+      </div></div>""", unsafe_allow_html=True)
+    st.plotly_chart(_fig_s, use_container_width=True, config={"displayModeBar": False})
+
+else:
+    # ── SENSOR OFFLINE ────────────────────────────────────────────────────────
+    if _s_ts is not None:
+        _last_seen = _s_ts.strftime("%d %b %Y, %H:%M:%S")
+        _offline_msg = f"Last seen: {_last_seen}"
+    else:
+        _offline_msg = "No data has been received yet."
+
+    st.markdown(f"""
+    <div style="padding:0 3rem 2rem;">
+      <div style="
+        background: rgba(255,60,60,0.06);
+        border: 1px solid rgba(255,60,60,0.25);
+        border-left: 3px solid #ff4444;
+        border-radius: 16px;
+        padding: 2rem 2rem;
+        text-align: center;
+      ">
+        <div style="font-size:2.8rem; margin-bottom:0.8rem;">🔌</div>
+        <div style="font-family:'Sora',sans-serif; font-size:1.3rem; font-weight:700;
+             color:#ff6666; margin-bottom:0.4rem;">Sensor Not Connected</div>
+        <div style="font-family:'Space Mono',monospace; font-size:0.68rem;
+             color:{T['text_muted']}; letter-spacing:1px; margin-bottom:0.6rem;">
+          Power on your NodeMCU and ensure it is connected to WiFi
+        </div>
+        <div style="font-family:'Space Mono',monospace; font-size:0.6rem;
+             color:{T['meta_tx']};">{_offline_msg}</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown(f"""
+<div style="padding:0 3rem 2rem; text-align:center; font-family:'Space Mono',monospace;
+font-size:0.58rem; color:{T['meta_tx']};">
+  ESP8266 &#x2192; Google Sheets &#x2192; Streamlit &middot; Auto-refreshes every 30s
+</div>""", unsafe_allow_html=True)
+
+# Auto-refresh every 30 seconds
+st.markdown("""<meta http-equiv="refresh" content="15">""", unsafe_allow_html=True)
 
 # ─── Footer ───────────────────────────────────────────────────────────────────
 rain_slots = int(forecast_df['rain_flag'].sum())
